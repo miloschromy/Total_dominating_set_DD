@@ -157,7 +157,7 @@ void state_change_by_domination(Graph_t& input_graph, State_t& state_to_update, 
 /// <param name="descendat_variable_id">next decision variable id according to order of OBDD</param>
 /// <param name="possible_to_dominate">Check if node creation makes sense as it is not neccessary to use</param>
 /// <returns></returns>
-size_t insert_new_node(Graph_t& input_graph, map<State_t, size_t>& new_layer_hash, vector<DecisionNode_t>& DD_new_layer, const DecisionNode_t& source_decision_node, 
+size_t DD_insert_new_node(Graph_t& input_graph, map<State_t, size_t>& new_layer_hash, vector<DecisionNode_t>& DD_new_layer, const DecisionNode_t& source_decision_node, 
                         const size_t& decision, const size_t& parent_index, const size_t& descendat_variable_id, 
                         const vector<size_t>& possible_to_dominate) {
   size_t decision_variable_id = source_decision_node.decision_variable;
@@ -216,38 +216,38 @@ void find_dead_end_nodes(const DecisionDiagram_t& exact_DD, vector<bool>& is_dom
 /// <param name="node1">First node to swap on specified layer</param>
 /// <param name="node2">Second node to swap on specified layer</param>
 void DD_swap_nodes(DecisionDiagram_t& Decision_diagram, const size_t& layer, const size_t& node1, const size_t& node2) {
-    
-  //flip pointers from parents and descendants node2 <-> node1 for each decision 0,1
-  for (size_t decision_val = 0; decision_val < 2; ++decision_val) {
-    for (size_t& parent : Decision_diagram[layer][node1].parents[decision_val]) {
-      assert(Decision_diagram[layer - 1][parent].decisions[decision_val] == node1);
-      Decision_diagram[layer - 1][parent].decisions[decision_val] = node2;
-    }
-    for (size_t& parent : Decision_diagram[layer][node2].parents[decision_val]) {
-      assert(Decision_diagram[layer - 1][parent].decisions[decision_val] == node2);
-      Decision_diagram[layer - 1][parent].decisions[decision_val] = node1;
-    }
-    if (Decision_diagram[layer][node1].decisions.size() > decision_val && Decision_diagram[layer][node1].decisions[decision_val] != -1) { //we have already instanciated the decision an it is not null
-      replace(Decision_diagram[layer + 1][Decision_diagram[layer][node1].decisions[decision_val]].parents[decision_val].begin(), Decision_diagram[layer + 1][Decision_diagram[layer][node1].decisions[decision_val]].parents[decision_val].end(),
-        node1, node2);
-    }
-    if (Decision_diagram[layer][node2].decisions.size() > decision_val && Decision_diagram[layer][node2].decisions[decision_val] != -1) { //we have already instanciated the decision an it is not null
-      replace(Decision_diagram[layer + 1][Decision_diagram[layer][node2].decisions[decision_val]].parents[decision_val].begin(), Decision_diagram[layer + 1][Decision_diagram[layer][node2].decisions[decision_val]].parents[decision_val].end(),
-        node2, node1);
-    }
+  if (node1 == node2) return;
+//flip pointers from parents and descendants node2 <-> node1 for each decision 0,1
+for (size_t decision_val = 0; decision_val < 2; ++decision_val) {
+  for (size_t& parent : Decision_diagram[layer][node1].parents[decision_val]) {
+    assert(Decision_diagram[layer - 1][parent].decisions[decision_val] == node1);
+    Decision_diagram[layer - 1][parent].decisions[decision_val] = node2;
   }
-  //flip descendants
-  //flip content of nodes
-  //swap states
-  Decision_diagram[layer][node1].node_state.weights_vector.swap(Decision_diagram[layer][node2].node_state.weights_vector);
-  //swap parents
-  Decision_diagram[layer][node1].parents[0].swap(Decision_diagram[layer][node2].parents[0]);
-  Decision_diagram[layer][node1].parents[1].swap(Decision_diagram[layer][node2].parents[1]);
-  //Decisions_swap
-  Decision_diagram[layer][node1].decisions.swap(Decision_diagram[layer][node2].decisions);
-  //best_path swap
-  swap(Decision_diagram[layer][node1].best_path, Decision_diagram[layer][node2].best_path);
-  swap(Decision_diagram[layer][node1].decision_variable, Decision_diagram[layer][node2].decision_variable);
+  for (size_t& parent : Decision_diagram[layer][node2].parents[decision_val]) {
+    assert(Decision_diagram[layer - 1][parent].decisions[decision_val] == node2);
+    Decision_diagram[layer - 1][parent].decisions[decision_val] = node1;
+  }
+  if (Decision_diagram[layer][node1].decisions.size() > decision_val && Decision_diagram[layer][node1].decisions[decision_val] != -1) { //we have already instanciated the decision an it is not null
+    replace(Decision_diagram[layer + 1][Decision_diagram[layer][node1].decisions[decision_val]].parents[decision_val].begin(), Decision_diagram[layer + 1][Decision_diagram[layer][node1].decisions[decision_val]].parents[decision_val].end(),
+      node1, node2);
+  }
+  if (Decision_diagram[layer][node2].decisions.size() > decision_val && Decision_diagram[layer][node2].decisions[decision_val] != -1) { //we have already instanciated the decision an it is not null
+    replace(Decision_diagram[layer + 1][Decision_diagram[layer][node2].decisions[decision_val]].parents[decision_val].begin(), Decision_diagram[layer + 1][Decision_diagram[layer][node2].decisions[decision_val]].parents[decision_val].end(),
+      node2, node1);
+  }
+}
+//flip descendants
+//flip content of nodes
+//swap states
+Decision_diagram[layer][node1].node_state.weights_vector.swap(Decision_diagram[layer][node2].node_state.weights_vector);
+//swap parents
+Decision_diagram[layer][node1].parents[0].swap(Decision_diagram[layer][node2].parents[0]);
+Decision_diagram[layer][node1].parents[1].swap(Decision_diagram[layer][node2].parents[1]);
+//Decisions_swap
+Decision_diagram[layer][node1].decisions.swap(Decision_diagram[layer][node2].decisions);
+//best_path swap
+swap(Decision_diagram[layer][node1].best_path, Decision_diagram[layer][node2].best_path);
+swap(Decision_diagram[layer][node1].decision_variable, Decision_diagram[layer][node2].decision_variable);
 
 }
 
@@ -259,40 +259,95 @@ void DD_swap_nodes(DecisionDiagram_t& Decision_diagram, const size_t& layer, con
 /// <param name="node_id">id of node on layer_id</param>
 void DD_remove_one_node(DecisionDiagram_t& Decision_diagram, const size_t& layer_id, const size_t& node_id) {
   if (node_id != Decision_diagram[layer_id].size() - 1) {
-    /*for (size_t decision_val = 0; decision_val < 2; ++decision_val) {
+    /*for (size_t decision_val = 0; decision_val < 2; ++decision_val) { //remove references from parents and descendants
       for (size_t potentialy_sad_parent : Decision_diagram[layer_id][node_id].parents[decision_val]) {
           if (Decision_diagram[layer_id-1][potentialy_sad_parent].decisions[])
       }
     }maybe i should kill the recursively the sons and parents but for now i assume that i do not have any decisions asociated with deleted node, just parents */
     DD_swap_nodes(Decision_diagram, layer_id, node_id, Decision_diagram[layer_id].size() - 1); //swap node to delete and last vertex
   }
+  for (size_t decision_val = 0; decision_val < 2; ++decision_val) {
+    //clear parent decisions
+    for (auto parent : Decision_diagram[layer_id][Decision_diagram[layer_id].size() - 1].parents[decision_val]) {
+      Decision_diagram[layer_id - 1][parent].decisions[decision_val] = -1;
+    }
+    //clear descendant parents pointers
+    if (Decision_diagram[layer_id][Decision_diagram[layer_id].size() - 1].decisions.size() > decision_val && Decision_diagram[layer_id][Decision_diagram[layer_id].size() - 1].decisions[decision_val] != -1){
+      remove(Decision_diagram[layer_id - 1][Decision_diagram[layer_id][Decision_diagram[layer_id].size() - 1].decisions[decision_val]].parents.begin(), 
+              Decision_diagram[layer_id - 1][Decision_diagram[layer_id][Decision_diagram[layer_id].size() - 1].decisions[decision_val]].parents.end(), Decision_diagram[layer_id].size() - 1);
+    }
+
+  }
   Decision_diagram[layer_id].pop_back(); //remove lasta vertexa
 }
 
+
+/// <summary>
+/// Merge all nodes from vector nodes_to_merge on layer_id (last layer). We expect that nodes are on the last layer as we do nothing with the decisions. We take the min
+/// </summary>
+/// <param name="Decision_diagram">Input diagram.</param>
+/// <param name="layer_id">Layer containing vertices to merge.</param>
+/// <param name="nodes_to_merge">Vector of vertices to merge.</param>
 void DD_merge_nodes(DecisionDiagram_t& Decision_diagram, const size_t& layer_id, vector<size_t>& nodes_to_merge) {
   //merge state => what the fuck that does even mean? for now i take the min of all
-  for (size_t i = 0; i < Decision_diagram[layer_id][nodes_to_merge[0]].node_state.weights_vector.size(); ++i) {
-    size_t min_id = *min_element(nodes_to_merge.begin(), nodes_to_merge.end(), [&Decision_diagram, &layer_id, &i]( size_t& node1,  size_t& node2) {
+  for (size_t i = 0; i < Decision_diagram[layer_id][nodes_to_merge[0]].node_state.weights_vector.size(); ++i) { //node[0] is new node
+    size_t min_id = *min_element(nodes_to_merge.begin(), nodes_to_merge.end(), [&Decision_diagram, &layer_id, &i](size_t& node1, size_t& node2) {
       if (Decision_diagram[layer_id][node1].node_state.weights_vector[i] == INIIT_EDGE_WEIGHT) return false;
       if (Decision_diagram[layer_id][node2].node_state.weights_vector[i] == INIIT_EDGE_WEIGHT) return true;
       return Decision_diagram[layer_id][node1].node_state.weights_vector[i] < Decision_diagram[layer_id][node2].node_state.weights_vector[i];
-      });
-    Decision_diagram[layer_id][nodes_to_merge[0]].node_state.weights_vector[i] = Decision_diagram[layer_id][min_id].node_state.weights_vector[i]; //this magick assign to i. variable lowest value, but does not take in account the -1 problem, os have to reimplement that part
+      }); //find the minimal value for each state
+    Decision_diagram[layer_id][nodes_to_merge[0]].node_state.weights_vector[i] = Decision_diagram[layer_id][min_id].node_state.weights_vector[i]; //this magik assign to i. variable lowest value, but does not take in account the -1 problem, os have to reimplement that part
   }
   for (size_t decision_val = 0; decision_val < 2; ++decision_val) { //merge parents by decision in set and then assign it to the vertex
     set<size_t> collect_parents;
-    for(auto x : nodes_to_merge){
-      collect_parents.insert(Decision_diagram[layer_id][x].parents.begin(), Decision_diagram[layer_id][x].parents.end());
+    for (auto x : nodes_to_merge) {
+      collect_parents.insert(Decision_diagram[layer_id][x].parents[decision_val].begin(), Decision_diagram[layer_id][x].parents[decision_val].end());
     }
     Decision_diagram[layer_id][nodes_to_merge[0]].parents[decision_val].assign(collect_parents.begin(), collect_parents.end()); //assign parents to the first node, which we chosed to be merged
     for (auto parent : collect_parents) { //set decisions for parents to right node
       Decision_diagram[layer_id - 1][parent].decisions[decision_val] = nodes_to_merge[0];
     }
   }
-  //finally we remove all vertices which we do not want
+  //finally we remove all vertices which we do not want, we have to do it from the back as we change the order of nodes during the process
   for (int rwalker = nodes_to_merge.size() - 1; rwalker > 0; --rwalker) {
     DD_remove_one_node(Decision_diagram, layer_id, nodes_to_merge[rwalker]);
   }
+}
+
+void DD_refine_node(Graph_t& input_graph, DecisionDiagram_t& Decision_diagram, const size_t& layer_id, const size_t& node_id) {
+  //move the old state to end of  layer_id for better manipulation
+  if (node_id != Decision_diagram[layer_id].size() - 1) { DD_swap_nodes(Decision_diagram, layer_id, node_id, Decision_diagram[layer_id].size() - 1); }
+  size_t refined_node_id = Decision_diagram[layer_id].size() - 1;
+  vector<size_t> possible_to_dominate(input_graph.vertex_count());
+  for (const pair<Edge_t, Weight_t>& dedge : input_graph.edge_weight) { //for unoriented vertices is enough to check adjacency_matrix[i].size(), for dvariant we dont have input degree
+    ++possible_to_dominate[dedge.first.second];
+  }
+  //split the decision
+  //create a db for layer, maybe we should keep that db or change the adress of nodes
+  map<State_t, size_t> layer_hash;
+  for (size_t layer_it = 0; layer_it <= Decision_diagram[layer_id].size() - 2; ++layer_it) { //hash current layer
+    layer_hash.insert(make_pair(Decision_diagram[layer_id][layer_it].node_state, layer_it));
+  }
+  for (size_t decision_val = 0; decision_val < 2; ++decision_val) { //we will create new nodes for each parent[decision] = refined_node
+    size_t decision_index = Decision_diagram[layer_id][refined_node_id].decisions.size() > decision_val ? Decision_diagram[layer_id][refined_node_id].decisions[decision_val] : -1;
+    for (auto parent : Decision_diagram[layer_id][refined_node_id].parents[decision_val]) {
+      Decision_diagram[layer_id - 1][parent].decisions[decision_val] = //associate decision with new decision on layer_id, set up the parent and decision connections right
+        DD_insert_new_node(input_graph, layer_hash, Decision_diagram[layer_id], Decision_diagram[layer_id - 1][parent], 
+          decision_val, parent, Decision_diagram[layer_id][refined_node_id].decision_variable, possible_to_dominate);
+      if (Decision_diagram[layer_id - 1][parent].decisions[decision_val] != -1) { //we have created the node
+        Decision_diagram[layer_id].back().decisions.resize(2); //reserve the decision size for new node
+        Decision_diagram[layer_id].back().decisions[decision_val] = decision_index; //set up decision to layer_id+1
+        if (decision_index != -1) { //if it is not false node, so decision exists and it is valid
+          Decision_diagram[layer_id + 1][decision_index].parents[decision_val].push_back(Decision_diagram[layer_id].size() - 1); //add new node to the decision and remove the old one
+          remove(Decision_diagram[layer_id + 1][decision_index].parents[decision_val].begin(), Decision_diagram[layer_id + 1][decision_index].parents[decision_val].end(), refined_node_id);
+        }
+      }
+    }
+  }
+  //choose nodes to merge if we want to
+
+  //cleanup??
+
 }
 
 /// <summary>
@@ -300,7 +355,7 @@ void DD_merge_nodes(DecisionDiagram_t& Decision_diagram, const size_t& layer_id,
 /// </summary>
 /// <param name="Decision_diagram">Decision diagram</param>
 /// <param name="marked_to_delete">list of nodes marked to delete in ascending order</param>
-void clear_last_layer(DecisionDiagram_t& Decision_diagram, vector<size_t>& marked_to_delete) {
+void clear_last_constructed_layer(DecisionDiagram_t& Decision_diagram, vector<size_t>& marked_to_delete) {
   for (int rwalker = marked_to_delete.size() - 1; rwalker >= 0; --rwalker) {
     DD_remove_one_node(Decision_diagram, Decision_diagram.size()-1, marked_to_delete[rwalker]);
   }
@@ -335,12 +390,12 @@ Weight_t create_exact_dd(Graph_t& input_graph, vector<size_t>& variables_order) 
       exact_DD[variable_order_index][processed_node_index].decisions.resize(2);
       for (size_t new_decision = 0; new_decision < 2; ++new_decision) { //each decision for current node 
         exact_DD[variable_order_index][processed_node_index].decisions[new_decision] =                          //connect decision to the right node returned from this complicated function
-          insert_new_node(input_graph, new_layer, exact_DD[variable_order_index + 1], exact_DD[variable_order_index][processed_node_index], 
+          DD_insert_new_node(input_graph, new_layer, exact_DD[variable_order_index + 1], exact_DD[variable_order_index][processed_node_index], 
             new_decision, processed_node_index, variables_order[variable_order_index + 1], possible_to_dominate);
       }
     }
     find_dead_end_nodes(exact_DD, DDnode_is_dominated, DDnodes_dominated_list); //we will find nodes which we dont want to expand and hence can be deleted
-    clear_last_layer(exact_DD, DDnodes_dominated_list); // clear last layer
+    clear_last_constructed_layer(exact_DD, DDnodes_dominated_list); // clear last layer
   }
 
  
