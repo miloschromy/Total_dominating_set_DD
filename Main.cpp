@@ -162,6 +162,7 @@ size_t DD_insert_new_node(Graph_t& input_graph, map<State_t, size_t>& new_layer_
                         const vector<size_t>& possible_to_dominate) {
   size_t decision_variable_id = source_decision_node.decision_variable;
   Weight_t cheapest_path_to_parent = source_decision_node.best_path;
+  if (decision) cheapest_path_to_parent += input_graph.vertex_weight[decision_variable_id];
   State_t new_state(source_decision_node.node_state);
 
   pair< map<State_t, size_t>::const_iterator, bool> new_layer_inserter; //find inserter interior
@@ -173,11 +174,11 @@ size_t DD_insert_new_node(Graph_t& input_graph, map<State_t, size_t>& new_layer_
     
   new_layer_inserter = new_layer_hash.insert(make_pair(new_state, DD_new_layer.size())); //if inserted, it will point to new layer end vertex, which we will add
   if (new_layer_inserter.second == true) { //was not inserted did not exist, need to bye inserted
-    DD_new_layer.push_back(DecisionNode_t(new_state, descendat_variable_id, cheapest_path_to_parent + (decision!=0)*input_graph.vertex_weight[decision_variable_id])); //insert new node, dont fill parents, just variable number
+    DD_new_layer.push_back(DecisionNode_t(new_state, descendat_variable_id, cheapest_path_to_parent)); //insert new node, dont fill parents, just variable number
   }
   DD_new_layer[new_layer_inserter.first->second].parents[decision].push_back(parent_index); // add parent for the node together with its decision edge
-  if (DD_new_layer[new_layer_inserter.first->second].best_path > cheapest_path_to_parent + (decision != 0) * input_graph.vertex_weight[decision_variable_id]) {
-    DD_new_layer[new_layer_inserter.first->second].best_path = cheapest_path_to_parent + (decision != 0) * input_graph.vertex_weight[decision_variable_id];
+  if (DD_new_layer[new_layer_inserter.first->second].best_path > cheapest_path_to_parent) {
+    DD_new_layer[new_layer_inserter.first->second].best_path = cheapest_path_to_parent;
   }
   return new_layer_inserter.first->second;
 }
@@ -219,11 +220,11 @@ void DD_swap_nodes(DecisionDiagram_t& Decision_diagram, const size_t& layer, con
   if (node1 == node2) return;
 //flip pointers from parents and descendants node2 <-> node1 for each decision 0,1
 for (size_t decision_val = 0; decision_val < 2; ++decision_val) {
-  for (size_t& parent : Decision_diagram[layer][node1].parents[decision_val]) {
+  for (size_t& parent : Decision_diagram[layer][node1].parents[decision_val]) { //for each parent of node1 with parent[decision_val]=node1 redirect it to node2
     assert(Decision_diagram[layer - 1][parent].decisions[decision_val] == node1);
     Decision_diagram[layer - 1][parent].decisions[decision_val] = node2;
   }
-  for (size_t& parent : Decision_diagram[layer][node2].parents[decision_val]) {
+  for (size_t& parent : Decision_diagram[layer][node2].parents[decision_val]) { //for each parent of node 2 do the same as above
     assert(Decision_diagram[layer - 1][parent].decisions[decision_val] == node2);
     Decision_diagram[layer - 1][parent].decisions[decision_val] = node1;
   }
@@ -258,26 +259,25 @@ swap(Decision_diagram[layer][node1].decision_variable, Decision_diagram[layer][n
 /// <param name="layer_id">layer id where, node_id should be deleted</param>
 /// <param name="node_id">id of node on layer_id</param>
 void DD_remove_one_node(DecisionDiagram_t& Decision_diagram, const size_t& layer_id, const size_t& node_id) {
-  if (node_id != Decision_diagram[layer_id].size() - 1) {
-    /*for (size_t decision_val = 0; decision_val < 2; ++decision_val) { //remove references from parents and descendants
-      for (size_t potentialy_sad_parent : Decision_diagram[layer_id][node_id].parents[decision_val]) {
-          if (Decision_diagram[layer_id-1][potentialy_sad_parent].decisions[])
-      }
-    }maybe i should kill the recursively the sons and parents but for now i assume that i do not have any decisions asociated with deleted node, just parents */
-    DD_swap_nodes(Decision_diagram, layer_id, node_id, Decision_diagram[layer_id].size() - 1); //swap node to delete and last vertex
-  }
+  //first clear all refernces to node which we want to delete
   for (size_t decision_val = 0; decision_val < 2; ++decision_val) {
     //clear parent decisions
-    for (auto parent : Decision_diagram[layer_id][Decision_diagram[layer_id].size() - 1].parents[decision_val]) {
+    for (auto parent : Decision_diagram[layer_id][node_id].parents[decision_val]) {
       Decision_diagram[layer_id - 1][parent].decisions[decision_val] = -1;
     }
+    Decision_diagram[layer_id][node_id].parents[decision_val].clear();
     //clear descendant parents pointers
-    if (Decision_diagram[layer_id][Decision_diagram[layer_id].size() - 1].decisions.size() > decision_val && Decision_diagram[layer_id][Decision_diagram[layer_id].size() - 1].decisions[decision_val] != -1){
-      remove(Decision_diagram[layer_id - 1][Decision_diagram[layer_id][Decision_diagram[layer_id].size() - 1].decisions[decision_val]].parents.begin(), 
-              Decision_diagram[layer_id - 1][Decision_diagram[layer_id][Decision_diagram[layer_id].size() - 1].decisions[decision_val]].parents.end(), Decision_diagram[layer_id].size() - 1);
+    if (Decision_diagram[layer_id][node_id].decisions.size() > decision_val  //we have created the decision for descendatn
+      && Decision_diagram[layer_id][node_id].decisions[decision_val] != -1){ //the decision is not null
+      auto element = find(Decision_diagram[layer_id + 1][Decision_diagram[layer_id][node_id].decisions[decision_val]].parents[decision_val].begin(), 
+              Decision_diagram[layer_id + 1][Decision_diagram[layer_id][node_id].decisions[decision_val]].parents[decision_val].end(), node_id);
+      *element = Decision_diagram[layer_id + 1][Decision_diagram[layer_id][node_id].decisions[decision_val]].parents[decision_val].back();
+      Decision_diagram[layer_id + 1][Decision_diagram[layer_id][node_id].decisions[decision_val]].parents[decision_val].pop_back();
+      Decision_diagram[layer_id][node_id].decisions[decision_val] = -1;
     }
 
   }
+  DD_swap_nodes(Decision_diagram, layer_id, node_id, Decision_diagram[layer_id].size() - 1); //swap node to delete and last vertex
   Decision_diagram[layer_id].pop_back(); //remove lasta vertexa
 }
 
@@ -315,38 +315,41 @@ void DD_merge_nodes(DecisionDiagram_t& Decision_diagram, const size_t& layer_id,
 }
 
 void DD_refine_node(Graph_t& input_graph, DecisionDiagram_t& Decision_diagram, const size_t& layer_id, const size_t& node_id) {
-  //move the old state to end of  layer_id for better manipulation
-  if (node_id != Decision_diagram[layer_id].size() - 1) { DD_swap_nodes(Decision_diagram, layer_id, node_id, Decision_diagram[layer_id].size() - 1); }
-  size_t refined_node_id = Decision_diagram[layer_id].size() - 1;
-  vector<size_t> possible_to_dominate(input_graph.vertex_count());
+  //copy content of old node to new node
+  DecisionNode_t node_to_refine(Decision_diagram[layer_id][node_id]);
+  //remove it from the decision diagram
+  DD_remove_one_node(Decision_diagram, layer_id, node_id);
+
+  //----------------this has to be changed, it will just fill the inputdeg for each vertex------
+  //-----------------===================================================================--------------
+  vector<size_t> possible_to_dominate(input_graph.vertex_count(), 0);
   for (const pair<Edge_t, Weight_t>& dedge : input_graph.edge_weight) { //for unoriented vertices is enough to check adjacency_matrix[i].size(), for dvariant we dont have input degree
     ++possible_to_dominate[dedge.first.second];
   }
   //split the decision
   //create a db for layer, maybe we should keep that db or change the adress of nodes
   map<State_t, size_t> layer_hash;
-  for (size_t layer_it = 0; layer_it <= Decision_diagram[layer_id].size() - 2; ++layer_it) { //hash current layer
+  for (size_t layer_it = 0; layer_it <= Decision_diagram[layer_id].size() - 1; ++layer_it) { //hash current layer
     layer_hash.insert(make_pair(Decision_diagram[layer_id][layer_it].node_state, layer_it));
   }
   for (size_t decision_val = 0; decision_val < 2; ++decision_val) { //we will create new nodes for each parent[decision] = refined_node
-    size_t decision_index = Decision_diagram[layer_id][refined_node_id].decisions.size() > decision_val ? Decision_diagram[layer_id][refined_node_id].decisions[decision_val] : -1;
-    for (auto parent : Decision_diagram[layer_id][refined_node_id].parents[decision_val]) {
-      Decision_diagram[layer_id - 1][parent].decisions[decision_val] = //associate decision with new decision on layer_id, set up the parent and decision connections right
+    size_t decision_index = node_to_refine.decisions.size() > decision_val ? node_to_refine.decisions[decision_val] : -1; //get the decision val (-1 if the decision does not exist)
+    for (auto parent : node_to_refine.parents[decision_val]) {
+      size_t new_node_index = //associate decision with new decision on layer_id, set up the parent and decision connections right
         DD_insert_new_node(input_graph, layer_hash, Decision_diagram[layer_id], Decision_diagram[layer_id - 1][parent], 
-          decision_val, parent, Decision_diagram[layer_id][refined_node_id].decision_variable, possible_to_dominate);
-      if (Decision_diagram[layer_id - 1][parent].decisions[decision_val] != -1) { //we have created the node
-        Decision_diagram[layer_id].back().decisions.resize(2); //reserve the decision size for new node
-        Decision_diagram[layer_id].back().decisions[decision_val] = decision_index; //set up decision to layer_id+1
+          decision_val, parent, node_to_refine.decision_variable, possible_to_dominate);
+      Decision_diagram[layer_id - 1][parent].decisions[decision_val] = new_node_index;
+      if (new_node_index != -1) { //we have created the node
+        Decision_diagram[layer_id][new_node_index].decisions.resize(2); //reserve the decision size for new node
+        Decision_diagram[layer_id][new_node_index].decisions[decision_val] = decision_index; //set up decision to layer_id+1
         if (decision_index != -1) { //if it is not false node, so decision exists and it is valid
-          Decision_diagram[layer_id + 1][decision_index].parents[decision_val].push_back(Decision_diagram[layer_id].size() - 1); //add new node to the decision and remove the old one
-          remove(Decision_diagram[layer_id + 1][decision_index].parents[decision_val].begin(), Decision_diagram[layer_id + 1][decision_index].parents[decision_val].end(), refined_node_id);
+          Decision_diagram[layer_id + 1][decision_index].parents[decision_val].push_back(new_node_index); //set a new decision for the parent
         }
       }
     }
   }
   //choose nodes to merge if we want to
 
-  //cleanup??
 
 }
 
@@ -379,6 +382,7 @@ Weight_t create_exact_dd(Graph_t& input_graph, vector<size_t>& variables_order) 
   exact_DD.push_back({ DecisionNode_t(input_graph.adjacency_matrix.size(), variables_order[0], 0)}); //root with clean state as nothing is covered yet
   // each layer
   for (size_t variable_order_index = 0; variable_order_index < variables_order.size()-1; ++variable_order_index) {//layer by layer
+    cerr << "<<<<<---------Layer " << variable_order_index << "-------";
     for (const size_t& neigbour : input_graph.adjacency_matrix[variables_order[variable_order_index]]) {
       --possible_to_dominate[neigbour];
     }
@@ -396,13 +400,21 @@ Weight_t create_exact_dd(Graph_t& input_graph, vector<size_t>& variables_order) 
     }
     find_dead_end_nodes(exact_DD, DDnode_is_dominated, DDnodes_dominated_list); //we will find nodes which we dont want to expand and hence can be deleted
     clear_last_constructed_layer(exact_DD, DDnodes_dominated_list); // clear last layer
+    cerr << exact_DD.back().size() << " nodes----->>>>>>>>\n";
   }
 
- 
+  
   auto best_element = min_element(exact_DD.back().begin(), exact_DD.back().end(), [](const DecisionNode_t& lhs, const DecisionNode_t& rhs) {
-     return (accumulate(lhs.node_state.weights_vector.end(), lhs.node_state.weights_vector.end(), 0) + lhs.best_path) < 
-            (accumulate(rhs.node_state.weights_vector.end(), rhs.node_state.weights_vector.end(), 0) + rhs.best_path);});
-  return best_element->best_path;
+    bool lhsbad = any_of(lhs.node_state.weights_vector.begin(), lhs.node_state.weights_vector.end(), [](const size_t i) { return i == -1; }),
+         rhsbad = any_of(rhs.node_state.weights_vector.begin(), rhs.node_state.weights_vector.end(), [](const size_t i) { return i == -1; });
+    if (lhsbad && !rhsbad) return false;
+    if (!lhsbad && rhsbad) return true;
+     return (accumulate(lhs.node_state.weights_vector.begin(), lhs.node_state.weights_vector.end(), 0) + lhs.best_path) < 
+            (accumulate(rhs.node_state.weights_vector.begin(), rhs.node_state.weights_vector.end(), 0) + rhs.best_path);});
+  cout << "<<<<< Best path value: " << best_element->best_path << "-----State: ";
+  for (auto w : best_element->node_state.weights_vector) cout << w << ", ";
+  cout << accumulate(best_element->node_state.weights_vector.begin(), best_element->node_state.weights_vector.end(), 0) << "----->>>>>>\n";
+  return best_element->best_path + accumulate(best_element->node_state.weights_vector.begin(), best_element->node_state.weights_vector.end(), 0);
   
 };
 
@@ -419,22 +431,16 @@ bool read_input_graph(Graph_t& graph_to_be_dominated, ifstream& input_stream) {
     cerr << "Data loading error.\n";
     return 0;
   }
-  size_t vertex_count, edges_count, source, target;
+  size_t vertex_count, edges_count, source, target, dumpster_dive;
   Weight_t weight=1;
-  bool weighted;
-  input_stream >> vertex_count >> edges_count >> weighted;
+  input_stream >> vertex_count >> edges_count >> weight >> dumpster_dive;
   for (size_t i=0; i < vertex_count; ++i) {
-    if (weighted) {
-      input_stream >> weight;
-    }
+    input_stream >> dumpster_dive >> weight;
     graph_to_be_dominated.vertex_weight.push_back(weight);
     graph_to_be_dominated.adjacency_matrix.push_back({});
   }
   for (size_t i=0; i < edges_count; ++i) {
-    input_stream >> source >> target;
-    if (weighted) {
-      input_stream >> weight;
-    }
+    input_stream >> dumpster_dive >> source >> target >> weight;
     graph_to_be_dominated.add_unoriented_edge(source, target, weight);
   }
   return 1;
